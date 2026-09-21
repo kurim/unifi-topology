@@ -40,14 +40,14 @@ Changelog = "https://github.com/merlijntishauser/unifi-topology/blob/main/CHANGE
 
 [project.optional-dependencies]
 dev = [
-  "Faker==40.36.0",
+  "Faker==40.39.0",
   "defusedxml==0.7.1",
-  "pre-commit==4.6.1",
+  "pre-commit==4.6.2",
   "pytest==9.1.1",
   "pytest-cov==7.1.0",
-  "pyright==1.1.411",
+  "pyright==1.1.414",
   "radon==6.0.1",
-  "ruff==0.16.0",
+  "ruff==0.16.8",
   "xenon==0.9.3",
   "pip-audit==2.10.1",
 ]
