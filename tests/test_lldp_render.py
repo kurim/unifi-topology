@@ -456,3 +456,29 @@ def test_render_lldp_md_client_scope_wireless():
     )
     assert "Phone" in output
     assert "TV" not in output
+
+
+def test_client_display_name_prefers_hostname_over_ucore_model():
+    """A Protect camera whose ucore block lacks a name must not be labelled by model.
+
+    Real controller data puts the Protect alias in ``hostname`` (slugified)
+    when ucore ``name`` is missing; the model string is never per-device.
+    """
+    client = {
+        "hostname": "kamera-udvar",
+        "unifi_device_info_from_ucore": {
+            "computed_model": "G6 Pro Bullet",
+            "product_model": "G6 Pro Bullet",
+            "product_shortname": "UVC G6 Pro Bullet",
+            "product_line": "protect",
+        },
+    }
+    assert client_display_name(client) == "kamera-udvar"
+
+
+def test_client_display_name_uses_ucore_model_when_no_hostname():
+    client = {
+        "mac": "aa:bb",
+        "unifi_device_info_from_ucore": {"computed_model": "G6 Pro Bullet"},
+    }
+    assert client_display_name(client) == "G6 Pro Bullet"

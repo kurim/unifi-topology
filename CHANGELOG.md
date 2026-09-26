@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- Clients whose UniFi device info (`unifi_device_info_from_ucore`) carries a product model but no `name` were labelled by that model, so several Protect cameras on one site all rendered as "G6 Pro Bullet", "G6 Turret" and so on. `client_display_name` now ranks `hostname` above the ucore model fields: the hostname is per device (controller data shows it as the slugified Protect alias) while the model is not. Order is now Network alias, ucore name, hostname, ucore model, MAC. Reported in merlijntishauser/unifi-network-maps-ha#303
+
 ## [3.2.0] - 2026-07-28
 
 ### Added

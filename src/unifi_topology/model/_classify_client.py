@@ -105,10 +105,23 @@ def _client_ucore_info(client: object) -> dict[str, object] | None:
 
 def _client_ucore_display_name(client: object) -> str | None:
     """Get display name from UniFi device info."""
+    return _client_ucore_name(client) or _client_ucore_model(client)
+
+
+def _client_ucore_name(client: object) -> str | None:
+    """Get the user-assigned name (e.g. Protect alias) from UniFi device info."""
     ucore = _client_ucore_info(client)
     if not ucore:
         return None
-    return first_string_field(ucore, "name", "computed_model", "product_model", "product_shortname")
+    return first_string_field(ucore, "name")
+
+
+def _client_ucore_model(client: object) -> str | None:
+    """Get the product model string from UniFi device info."""
+    ucore = _client_ucore_info(client)
+    if not ucore:
+        return None
+    return first_string_field(ucore, "computed_model", "product_model", "product_shortname")
 
 
 def _client_vendor(client: object) -> str | None:
@@ -221,11 +234,17 @@ def classify_client_type(client: object) -> str:
 
 
 def client_display_name(client: object) -> str | None:
-    """Get display name for a client."""
-    name = first_string_field(client, "name")
-    if name:
-        return name
-    preferred = _client_ucore_display_name(client)
-    if preferred:
-        return preferred
-    return first_string_field(client, "hostname", "mac")
+    """Get display name for a client.
+
+    User-assigned names win (Network alias, then the UniFi device name that
+    Protect/Talk expose via ucore). The hostname ranks above the ucore model
+    string because it is per device, while the model is not: cameras whose
+    ucore block lacks a name would otherwise all be labelled by their model.
+    """
+    return (
+        first_string_field(client, "name")
+        or _client_ucore_name(client)
+        or first_string_field(client, "hostname")
+        or _client_ucore_model(client)
+        or first_string_field(client, "mac")
+    )
