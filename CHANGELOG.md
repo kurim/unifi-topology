@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.2.1] - 2026-09-27
+
 ### Fixed
 - Clients whose UniFi device info (`unifi_device_info_from_ucore`) carries a product model but no `name` were labelled by that model, so several Protect cameras on one site all rendered as "G6 Pro Bullet", "G6 Turret" and so on. `client_display_name` now ranks `hostname` above the ucore model fields: the hostname is per device (controller data shows it as the slugified Protect alias) while the model is not. Order is now Network alias, ucore name, hostname, ucore model, MAC. Reported in merlijntishauser/unifi-network-maps-ha#303
 
@@ -310,7 +312,8 @@ First stable release, extracted from `unifi-network-maps` v1.6.x.
 - PyPI trusted publishing via GitHub Actions
 - Dependabot and CodeQL workflows
 
-[Unreleased]: https://github.com/merlijntishauser/unifi-topology/compare/v3.2.0...HEAD
+[Unreleased]: https://github.com/merlijntishauser/unifi-topology/compare/v3.2.1...HEAD
+[3.2.1]: https://github.com/merlijntishauser/unifi-topology/compare/v3.2.0...v3.2.1
 [3.2.0]: https://github.com/merlijntishauser/unifi-topology/compare/v3.1.2...v3.2.0
 [3.1.2]: https://github.com/merlijntishauser/unifi-topology/compare/v3.1.1...v3.1.2
 [3.1.1]: https://github.com/merlijntishauser/unifi-topology/compare/v3.0.2...v3.1.1
