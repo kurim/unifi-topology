@@ -103,11 +103,6 @@ def _client_ucore_info(client: object) -> dict[str, object] | None:
     return None
 
 
-def _client_ucore_display_name(client: object) -> str | None:
-    """Get display name from UniFi device info."""
-    return _client_ucore_name(client) or _client_ucore_model(client)
-
-
 def _client_ucore_name(client: object) -> str | None:
     """Get the user-assigned name (e.g. Protect alias) from UniFi device info."""
     ucore = _client_ucore_info(client)
