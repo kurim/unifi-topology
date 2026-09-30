@@ -15,8 +15,6 @@ __all__ = [
     "_layout_nodes",
     "_layout_nodeset",
     "_layout_positions",
-    "_layout_single_group",
-    "_offset_positions",
     "_resolve_group_order",
     "_resolve_roots",
     "_sort_children",
@@ -35,8 +33,6 @@ _layout_grouped_nodes = _svg_group_layout._layout_grouped_nodes
 _layout_nodes = _svg_tree_layout._layout_nodes
 _layout_nodeset = _svg_tree_layout._layout_nodeset
 _layout_positions = _svg_tree_layout._layout_positions
-_layout_single_group = _svg_group_layout._layout_single_group
-_offset_positions = _svg_group_layout._offset_positions
 _resolve_group_order = _svg_group_layout._resolve_group_order
 _resolve_roots = _svg_tree_layout._resolve_roots
 _sort_children = _svg_tree_layout._sort_children

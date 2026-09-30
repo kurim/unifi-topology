@@ -6,13 +6,11 @@ import math
 
 from ..model.topology import Edge
 from . import _svg_edge_labels_record, _svg_edge_shared
-from ._svg_group_layout import _build_node_to_group_map
 from .svg_theme import SvgOptions, SvgTheme
 
 __all__ = [
     "_client_attachment",
     "_client_port_text",
-    "_compute_cross_group_path",
     "_compute_elbow_path",
     "_edge_label_context",
     "_edge_opacity",
@@ -82,23 +80,6 @@ def _compute_elbow_path(
     return f"M {src_cx} {src_bottom} L {src_cx} {mid_y} L {dst_cx} {mid_y} L {dst_cx} {dst_top}"
 
 
-def _compute_cross_group_path(
-    src_cx: float, src_bottom: float, dst_cx: float, dst_top: float
-) -> str:
-    """Direct connector for an edge whose endpoints sit in different
-    layout_mode="grouped" districts.
-
-    The elbow path assumes the destination sits below the source in one
-    shared coordinate space -- each group is laid out independently and
-    restarts its own depth at 0, so a parent in one group and its child in
-    another can land at any relative position, and the elbow's vertical
-    L-shape can come out degenerate or point the wrong way. A straight
-    line always reaches from one point to the other regardless of their
-    relative position.
-    """
-    return f"M {src_cx} {src_bottom} L {dst_cx} {dst_top}"
-
-
 def _render_poe_icon(
     lines: list[str], dst_cx: float, mid_y: float, dst_top: float, theme: SvgTheme
 ) -> None:
@@ -120,17 +101,10 @@ def _render_standard_edge(
     edge: Edge,
     opacity_attr: str,
     base_attrs: str,
-    *,
-    cross_group: bool = False,
 ) -> None:
     """Render a standard edge (no VLAN coloring)."""
     color = "url(#link-poe)" if edge.poe else "url(#link-standard)"
-    if cross_group:
-        dash = ' stroke-dasharray="3 3"'
-    elif edge.wireless:
-        dash = ' stroke-dasharray="6 4"'
-    else:
-        dash = ""
+    dash = ' stroke-dasharray="6 4"' if edge.wireless else ""
     width_px = 2 if edge.poe else 1
     lines.append(
         f'<path d="{path}" stroke="{color}" stroke-width="{width_px}" '
@@ -146,8 +120,6 @@ def _render_single_edge(
     options: SvgOptions,
     theme: SvgTheme,
     max_vlan_colors: int | None,
-    *,
-    cross_group: bool = False,
 ) -> None:
     """Render a single edge with coordinates, attributes, and optional VLAN styling."""
     src_x, src_y = positions[edge.left]
@@ -159,11 +131,7 @@ def _render_single_edge(
     mid_y = (src_bottom + dst_top) / 2
     width_px = 2 if edge.poe else 1
 
-    path = (
-        _compute_cross_group_path(src_cx, src_bottom, dst_cx, dst_top)
-        if cross_group
-        else _compute_elbow_path(src_cx, src_bottom, dst_cx, dst_top, mid_y)
-    )
+    path = _compute_elbow_path(src_cx, src_bottom, dst_cx, dst_top, mid_y)
     state = _edge_render_state(edge, node_types, max_vlan_colors=max_vlan_colors)
 
     if state.display_vlans:
@@ -173,15 +141,13 @@ def _render_single_edge(
             state.display_vlans,
             theme,
             width_px,
-            edge.wireless or cross_group,
+            edge.wireless,
             state.base_attrs,
             state.opacity,
         )
         _render_vlan_endpoint_markers(lines, dst_cx, dst_top + 4, state.display_vlans, theme)
     else:
-        _render_standard_edge(
-            lines, path, edge, state.opacity_attr, state.base_attrs, cross_group=cross_group
-        )
+        _render_standard_edge(lines, path, edge, state.opacity_attr, state.base_attrs)
 
     if edge.poe:
         _render_poe_icon(lines, dst_cx, mid_y, dst_top, theme)
@@ -196,29 +162,15 @@ def _render_svg_edges(
     theme: SvgTheme,
     max_vlan_colors: int | None = None,
     node_names: dict[str, str] | None = None,
-    groups: dict[str, list[str]] | None = None,
 ) -> tuple[dict[str, str], dict[str, str]]:
     node_port_labels: dict[str, str] = {}
     node_port_prefix: dict[str, str] = {}
-    node_to_group = _build_node_to_group_map(groups) if groups else {}
     for edge in edges:
         _record_edge_labels(edge, node_types, node_port_labels, node_port_prefix, node_names)
     for edge in sorted(edges, key=lambda item: item.poe):
         if edge.left not in positions or edge.right not in positions:
             continue
-        cross_group = bool(node_to_group) and node_to_group.get(edge.left) != node_to_group.get(
-            edge.right
-        )
-        _render_single_edge(
-            lines,
-            edge,
-            positions,
-            node_types,
-            options,
-            theme,
-            max_vlan_colors,
-            cross_group=cross_group,
-        )
+        _render_single_edge(lines, edge, positions, node_types, options, theme, max_vlan_colors)
     return node_port_labels, node_port_prefix
 
 

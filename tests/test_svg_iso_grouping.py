@@ -22,18 +22,21 @@ def _two_vlan_topology() -> tuple[list[Edge], dict[str, str]]:
     return edges, node_types
 
 
-def test_grouped_positions_keep_each_group_in_its_own_column_range():
+def test_grouped_positions_keep_the_tree_levels():
+    """Grouping must not change the hierarchy: every node keeps the tree
+    depth (grid row) it has in the ungrouped layout.
+    """
     edges, node_types = _two_vlan_topology()
     groups, group_order, _group_vlan_ids = group_nodes_by_vlan(edges, {1: "LAN", 20: "Guest"})
 
     options = SvgOptions(layout_mode="grouped")
     layout = _iso_layout(options)
-    grid = _iso_grid_positions(layout, edges, node_types, options, groups, group_order)
+    grouped = _iso_grid_positions(layout, edges, node_types, options, groups, group_order)
+    physical = _iso_grid_positions(layout, edges, node_types, SvgOptions())
 
-    lan_xs = [grid[n][0] for n in groups["LAN"] if n in grid]
-    guest_xs = [grid[n][0] for n in groups["Guest"] if n in grid]
-
-    assert max(lan_xs) < min(guest_xs)
+    assert {n: gy for n, (_gx, gy) in grouped.items()} == {
+        n: gy for n, (_gx, gy) in physical.items()
+    }
 
 
 def test_grouped_positions_do_not_collide():

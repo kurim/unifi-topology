@@ -12,9 +12,15 @@ from .svg_theme import SvgOptions
 
 
 def _layout_nodes(
-    edges: list[Edge], node_types: dict[str, str], options: SvgOptions
+    edges: list[Edge],
+    node_types: dict[str, str],
+    options: SvgOptions,
+    node_to_group: dict[str, str] | None = None,
+    group_order: list[str] | None = None,
 ) -> tuple[dict[str, tuple[float, float]], int, int]:
-    positions_index, levels = _tree_layout_indices(edges, node_types, options.max_nodes_per_row)
+    positions_index, levels = _tree_layout_indices(
+        edges, node_types, options.max_nodes_per_row, node_to_group, group_order
+    )
     positions: dict[str, tuple[float, float]] = {}
     max_index = max(positions_index.values(), default=0.0)
     leaf_count = max(1, math.ceil(max_index) + 1)
@@ -96,6 +102,9 @@ class _LayoutState:
     positions_index: dict[str, float] = field(default_factory=dict)
     visited: set[str] = field(default_factory=set)
     cursor: int = 0
+    node_to_group: dict[str, str] = field(default_factory=dict)
+    group_rank: dict[str, int] = field(default_factory=dict)
+    group_gap: int = 0
 
 
 def _leaf_position(state: _LayoutState, node: str) -> float:
@@ -148,6 +157,44 @@ def _wrapped_leaf_positions(
     return positions
 
 
+def _wrap_limit(max_nodes_per_row: int | None) -> int | None:
+    return max_nodes_per_row if max_nodes_per_row and max_nodes_per_row >= 1 else None
+
+
+def _leaf_blocks(leaves: list[str], state: _LayoutState) -> list[tuple[str | None, list[str]]]:
+    """Split sibling leaves into one block per group; ungrouped leaves go last."""
+    by_group: dict[str | None, list[str]] = {}
+    for leaf in leaves:
+        by_group.setdefault(state.node_to_group.get(leaf), []).append(leaf)
+    named = sorted(
+        (group for group in by_group if group is not None),
+        key=lambda group: (state.group_rank.get(group, len(state.group_rank)), group),
+    )
+    blocks: list[tuple[str | None, list[str]]] = [(group, by_group[group]) for group in named]
+    if None in by_group:
+        blocks.append((None, by_group[None]))
+    return blocks
+
+
+def _block_indices(
+    group: str | None,
+    members: list[str],
+    level: int,
+    children: dict[str, list[str]],
+    state: _LayoutState,
+    max_nodes_per_row: int | None,
+) -> list[float]:
+    limit = _wrap_limit(max_nodes_per_row)
+    if group is not None:
+        # A group's leaves stay one contiguous block so its box can enclose them.
+        indices = _wrapped_leaf_positions(members, level, state, limit or len(members))
+        state.cursor += state.group_gap
+        return indices
+    if limit is not None and len(members) > limit:
+        return _wrapped_leaf_positions(members, level, state, limit)
+    return [_child_position(child, level, children, state, max_nodes_per_row) for child in members]
+
+
 def _child_indices(
     node: str,
     level: int,
@@ -156,20 +203,16 @@ def _child_indices(
     max_nodes_per_row: int | None,
 ) -> list[float]:
     kids = children.get(node, [])
-    if not max_nodes_per_row or max_nodes_per_row < 1:
+    if not state.node_to_group and _wrap_limit(max_nodes_per_row) is None:
         return [_child_position(child, level, children, state, max_nodes_per_row) for child in kids]
-    wrappable = [child for child in kids if child not in state.visited and not children.get(child)]
+    leaves = [child for child in kids if child not in state.visited and not children.get(child)]
     indices = [
         _child_position(child, level, children, state, max_nodes_per_row)
         for child in kids
-        if child not in wrappable
+        if child not in leaves
     ]
-    if len(wrappable) > max_nodes_per_row:
-        indices.extend(_wrapped_leaf_positions(wrappable, level, state, max_nodes_per_row))
-    else:
-        indices.extend(
-            _child_position(child, level, children, state, max_nodes_per_row) for child in wrappable
-        )
+    for group, members in _leaf_blocks(leaves, state):
+        indices.extend(_block_indices(group, members, level, children, state, max_nodes_per_row))
     return indices
 
 
@@ -227,8 +270,15 @@ def _layout_positions(
     roots: list[str],
     sort_key,
     max_nodes_per_row: int | None = None,
+    node_to_group: dict[str, str] | None = None,
+    group_order: list[str] | None = None,
+    group_gap: int = 0,
 ) -> tuple[dict[str, float], dict[str, int]]:
-    state = _LayoutState()
+    state = _LayoutState(
+        node_to_group=node_to_group or {},
+        group_rank={name: rank for rank, name in enumerate(group_order or [])},
+        group_gap=group_gap,
+    )
     branch_roots = [root for root in roots if children.get(root)]
     leaf_roots = [root for root in roots if not children.get(root)]
     for root in branch_roots:
@@ -244,7 +294,11 @@ def _tree_layout_indices(
     edges: list[Edge],
     node_types: dict[str, str],
     max_nodes_per_row: int | None = None,
+    node_to_group: dict[str, str] | None = None,
+    group_order: list[str] | None = None,
+    group_gap: int = 0,
 ) -> tuple[dict[str, float], dict[str, int]]:
+    """Tree layout indices; ``group_gap`` empty columns follow each group's leaf block."""
     nodes = _layout_nodeset(edges, node_types)
     children, incoming = _build_children_maps(edges, nodes)
     sort_key = _sort_key_for_nodes(node_types)
@@ -256,4 +310,7 @@ def _tree_layout_indices(
         roots=roots,
         sort_key=sort_key,
         max_nodes_per_row=max_nodes_per_row,
+        node_to_group=node_to_group,
+        group_order=group_order,
+        group_gap=group_gap,
     )
