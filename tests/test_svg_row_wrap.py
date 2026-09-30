@@ -118,3 +118,72 @@ def test_render_svg_isometric_compact_layout_ignores_max_nodes_per_row():
     options = SvgOptions(iso_compact_layout=True, max_nodes_per_row=10)
     output = svg_iso_module.render_svg_isometric(edges, node_types=node_types, options=options)
     assert output.startswith("<svg")
+
+
+def _orphaned_leaves(count: int) -> tuple[list[Edge], dict[str, str]]:
+    """Nodes with no edges among themselves: each is its own root, as a
+    grouped/boxed layout sees a VLAN group once its shared switch parent
+    is filtered out as infrastructure.
+    """
+    return [], {f"c{i}": "client" for i in range(count)}
+
+
+def test_wraps_orphaned_roots_with_no_shared_parent():
+    """A boxed group's members lose the edge to their real (excluded)
+    parent, so each becomes its own root -- the per-parent wrapping in
+    _child_indices never sees them as siblings to wrap. Root-level
+    placement must wrap them the same way.
+    """
+    edges, node_types = _orphaned_leaves(12)
+    positions, levels = _tree_layout_indices(edges, node_types, max_nodes_per_row=5)
+    node_levels = [levels[f"c{i}"] for i in range(12)]
+    assert set(node_levels) == {0, 1, 2}
+    columns = {positions[f"c{i}"] for i in range(12)}
+    assert len(columns) == 5
+
+
+def test_no_wrap_for_orphaned_roots_at_or_below_threshold():
+    edges, node_types = _orphaned_leaves(5)
+    positions, levels = _tree_layout_indices(edges, node_types, max_nodes_per_row=5)
+    assert {levels[f"c{i}"] for i in range(5)} == {0}
+    assert len({positions[f"c{i}"] for i in range(5)}) == 5
+
+
+def test_orphaned_roots_unaffected_by_default_threshold():
+    edges, node_types = _orphaned_leaves(12)
+    baseline, _ = _tree_layout_indices(edges, node_types)
+    positions, levels = _tree_layout_indices(edges, node_types, max_nodes_per_row=0)
+    assert positions == baseline
+    assert {levels[f"c{i}"] for i in range(12)} == {0}
+
+
+def test_grouped_layout_wraps_a_group_whose_parent_was_excluded():
+    """The actual bug scenario: render_svg's grouped layout filters a
+    VLAN group's edges down to its members, so a switch left out as
+    infrastructure severs the edge to its clients -- each becomes its
+    own root within that group's subset, same as _orphaned_leaves above.
+    """
+    edges = [Edge("gw", "sw1")] + [Edge("sw1", f"c{i}") for i in range(12)]
+    node_types = {"gw": "gateway", "sw1": "switch"}
+    node_types.update({f"c{i}": "client" for i in range(12)})
+    groups = {"LAN": [f"c{i}" for i in range(12)]}
+
+    wide = svg_module.render_svg(
+        edges, node_types=node_types, options=SvgOptions(layout_mode="grouped"), groups=groups
+    )
+    wrapped = svg_module.render_svg(
+        edges,
+        node_types=node_types,
+        options=SvgOptions(layout_mode="grouped", max_nodes_per_row=5),
+        groups=groups,
+    )
+
+    def _dims(svg: str) -> tuple[float, float]:
+        w = float(re.search(r'width="([\d.]+)"', svg).group(1))
+        h = float(re.search(r'height="([\d.]+)"', svg).group(1))
+        return w, h
+
+    wide_w, wide_h = _dims(wide)
+    wrapped_w, wrapped_h = _dims(wrapped)
+    assert wrapped_w < wide_w
+    assert wrapped_h > wide_h

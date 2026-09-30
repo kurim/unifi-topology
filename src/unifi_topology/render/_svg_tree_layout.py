@@ -197,6 +197,29 @@ def _dfs_position(
     return _assign_position(node, child_indices, state)
 
 
+def _place_leaf_roots(
+    leaf_roots: list[str],
+    children: dict[str, list[str]],
+    state: _LayoutState,
+    max_nodes_per_row: int | None,
+) -> None:
+    """Place top-level nodes with no children of their own, wrapping into
+    multiple rows the same way sibling leaves under one shared parent do.
+
+    A boxed/grouped layout filters edges down to one group's members,
+    which strips the edge to each member's real (excluded) physical
+    parent -- e.g. a VLAN group of clients with their switch left out as
+    infrastructure. Every member then becomes its own root instead of a
+    shared parent's child, so the ordinary per-parent wrapping in
+    _child_indices never triggers for it.
+    """
+    if max_nodes_per_row and max_nodes_per_row >= 1 and len(leaf_roots) > max_nodes_per_row:
+        _wrapped_leaf_positions(leaf_roots, -1, state, max_nodes_per_row)
+        return
+    for root in leaf_roots:
+        _dfs_position(root, 0, children, state, max_nodes_per_row)
+
+
 def _layout_positions(
     nodes: set[str],
     children: dict[str, list[str]],
@@ -206,8 +229,11 @@ def _layout_positions(
     max_nodes_per_row: int | None = None,
 ) -> tuple[dict[str, float], dict[str, int]]:
     state = _LayoutState()
-    for root in roots:
+    branch_roots = [root for root in roots if children.get(root)]
+    leaf_roots = [root for root in roots if not children.get(root)]
+    for root in branch_roots:
         _dfs_position(root, 0, children, state, max_nodes_per_row)
+    _place_leaf_roots(leaf_roots, children, state, max_nodes_per_row)
     for node in sorted(nodes, key=sort_key):
         if node not in state.positions_index:
             _dfs_position(node, 0, children, state, max_nodes_per_row)
