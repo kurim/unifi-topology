@@ -94,7 +94,14 @@ def _render_svg_topology(
     node_names: dict[str, str] | None = None,
 ) -> None:
     node_port_labels, _ = _render_svg_edges(
-        lines, edges, positions, node_types, options, theme, node_names=node_names
+        lines,
+        edges,
+        positions,
+        node_types,
+        options,
+        theme,
+        node_names=node_names,
+        groups=groups,
     )
     _render_svg_nodes(
         lines,

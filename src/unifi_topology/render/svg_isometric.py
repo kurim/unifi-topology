@@ -212,7 +212,7 @@ def render_svg_isometric(
     per_type_decals = None if theme.icon_decal_iso else _build_decal_colors(theme)
     decal_color = theme.icon_decal_iso or theme.icon_decal
     icons = _load_isometric_icons(theme.icon_set, decal_color, per_type_decals)
-    layout_positions = _iso_layout_positions(edges, node_types, options)
+    layout_positions = _iso_layout_positions(edges, node_types, options, groups, group_order)
     layout = layout_positions.layout
     grid_positions = layout_positions.grid_positions
     positions = layout_positions.positions

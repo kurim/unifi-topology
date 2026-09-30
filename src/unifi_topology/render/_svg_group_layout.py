@@ -17,7 +17,6 @@ __all__ = [
     "_filter_edges_for_group",
     "_layout_grouped_nodes",
     "_layout_single_group",
-    "_layout_ungrouped_nodes",
     "_offset_positions",
     "_resolve_group_order",
     "_svg_node_group_attrs",
@@ -104,22 +103,19 @@ def _offset_positions(
     return {name: (x + dx, y + dy) for name, (x, y) in positions.items()}
 
 
-def _layout_ungrouped_nodes(
-    edges: list[Edge],
+def _backbone_node_types(
     node_types: dict[str, str],
-    options: SvgOptions,
-    all_nodes: set[str],
     node_to_group: dict[str, str],
-    current_x: float,
-) -> tuple[dict[str, tuple[float, float]], GroupBounds | None, float, float]:
-    ungrouped = all_nodes - set(node_to_group.keys())
-    if not ungrouped:
-        return {}, None, current_x, 0.0
-    positions, width, height = _layout_single_group(edges, ungrouped, node_types, options)
-    offset_positions = _offset_positions(positions, current_x - options.padding, 0)
-    bounds = _compute_group_bounds("Other", offset_positions, options, current_x)
-    next_x = current_x + width + options.group_gap
-    return offset_positions, bounds, next_x, height
+) -> dict[str, str]:
+    """Node types for nodes that were not pulled into any VLAN group."""
+    return {name: node_type for name, node_type in node_types.items() if name not in node_to_group}
+
+
+def _backbone_edges(edges: list[Edge], node_to_group: dict[str, str]) -> list[Edge]:
+    """Edges where neither endpoint was pulled into a VLAN group."""
+    return [
+        edge for edge in edges if edge.left not in node_to_group and edge.right not in node_to_group
+    ]
 
 
 def _layout_grouped_nodes(
@@ -129,44 +125,50 @@ def _layout_grouped_nodes(
     groups: dict[str, list[str]],
     group_order: list[str] | None,
 ) -> tuple[dict[str, tuple[float, float]], list[GroupBounds], int, int]:
-    """Layout nodes in horizontal group lanes."""
+    """Layout VLAN-grouped nodes in boxed lanes below the physical backbone.
+
+    Nodes left out of every group -- typically infrastructure devices,
+    whose trunk/uplink ports carry traffic for every VLAN and so can't be
+    assigned to a single group -- keep the plain tree layout's position
+    with no box, rather than being swept into a generic boundary. Only the
+    VLAN lanes are new relative to the physical layout.
+    """
     all_nodes = _layout_nodeset(edges, node_types)
     ordered_groups = _resolve_group_order(groups, group_order)
     node_to_group = _assign_nodes_to_groups(all_nodes, groups)
 
-    all_positions: dict[str, tuple[float, float]] = {}
+    backbone_positions, backbone_width, backbone_height = _layout_nodes(
+        _backbone_edges(edges, node_to_group),
+        _backbone_node_types(node_types, node_to_group),
+        options,
+    )
+    all_positions: dict[str, tuple[float, float]] = dict(backbone_positions)
+    lane_y = (
+        float(backbone_height) + options.group_gap if backbone_positions else float(options.padding)
+    )
+
     group_bounds_list: list[GroupBounds] = []
     current_x = float(options.padding)
-    max_height = 0.0
+    max_lane_height = 0.0
 
     for group_name in ordered_groups:
         group_nodes = set(groups.get(group_name, [])) & all_nodes
         if not group_nodes:
             continue
         positions, width, height = _layout_single_group(edges, group_nodes, node_types, options)
-        offset_positions = _offset_positions(positions, current_x - options.padding, 0)
+        offset_positions = _offset_positions(
+            positions, current_x - options.padding, lane_y - options.padding
+        )
         all_positions.update(offset_positions)
         group_bounds_list.append(
             _compute_group_bounds(group_name, offset_positions, options, current_x)
         )
         current_x += width + options.group_gap
-        max_height = max(max_height, height)
+        max_lane_height = max(max_lane_height, height)
 
-    ungrouped_positions, ungrouped_bounds, current_x, ungrouped_height = _layout_ungrouped_nodes(
-        edges,
-        node_types,
-        options,
-        all_nodes,
-        node_to_group,
-        current_x,
-    )
-    all_positions.update(ungrouped_positions)
-    if ungrouped_bounds is not None:
-        group_bounds_list.append(ungrouped_bounds)
-    max_height = max(max_height, ungrouped_height)
-
-    total_width = int(current_x - options.group_gap + options.padding)
-    total_height = int(max_height)
+    lanes_width = current_x - options.group_gap + options.padding if group_bounds_list else 0.0
+    total_width = int(max(backbone_width, lanes_width))
+    total_height = int(lane_y + max_lane_height) if group_bounds_list else int(backbone_height)
     return all_positions, group_bounds_list, total_width, total_height
 
 
