@@ -119,6 +119,12 @@ def _grouped_tree_layout_indices(
     column range (its own district) instead of interleaving every node
     into one tree. Each group keeps its own sibling-order/depth layout,
     including row-wrapping, and groups are placed left to right.
+
+    Nodes left out of every group -- typically infrastructure devices,
+    whose trunk/uplink ports carry traffic for every VLAN -- are laid out
+    first, at column 0, exactly as the plain (non-grouped) tree layout
+    would place them. VLAN districts are appended to their right, so
+    grouping only adds new districts rather than displacing the backbone.
     """
     all_nodes = _layout_nodeset(edges, node_types)
     ordered_groups = _resolve_group_order(groups, group_order)
@@ -127,6 +133,15 @@ def _grouped_tree_layout_indices(
     positions_index: dict[str, float] = {}
     levels: dict[str, int] = {}
     current_x = 0.0
+
+    ungrouped = all_nodes - set(node_to_group.keys())
+    if ungrouped:
+        backbone_positions, backbone_levels, backbone_width = _layout_district_at_offset(
+            edges, node_types, ungrouped, max_nodes_per_row, current_x
+        )
+        positions_index.update(backbone_positions)
+        levels.update(backbone_levels)
+        current_x += backbone_width + 1  # one empty column before the VLAN districts
 
     for group_name in ordered_groups:
         group_nodes = set(groups.get(group_name, [])) & all_nodes
@@ -138,14 +153,6 @@ def _grouped_tree_layout_indices(
         positions_index.update(group_positions)
         levels.update(group_levels)
         current_x += width + 1  # one empty column between districts
-
-    ungrouped = all_nodes - set(node_to_group.keys())
-    if ungrouped:
-        ungrouped_positions, ungrouped_levels, _width = _layout_district_at_offset(
-            edges, node_types, ungrouped, max_nodes_per_row, current_x
-        )
-        positions_index.update(ungrouped_positions)
-        levels.update(ungrouped_levels)
 
     return positions_index, levels
 
