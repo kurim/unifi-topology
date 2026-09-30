@@ -7,9 +7,14 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 
 from ..model.topology import Edge
+from ._svg_group_layout import (
+    _assign_nodes_to_groups,
+    _filter_edges_for_group,
+    _resolve_group_order,
+)
 from ._svg_iso_district_layout import _iso_district_grid
 from ._svg_iso_routing import edge_occupancy, edge_route
-from ._svg_tree_layout import _tree_layout_indices
+from ._svg_tree_layout import _layout_nodeset, _tree_layout_indices
 from .svg_iso_geometry import IsoLayout, _iso_project, _iso_project_center
 from .svg_theme import SvgOptions, SvgTheme
 
@@ -85,15 +90,82 @@ def _project_iso_positions(
     return grid_positions, _project_grid(layout, grid_positions)
 
 
+def _layout_district_at_offset(
+    edges: list[Edge],
+    node_types: dict[str, str],
+    subset: set[str],
+    max_nodes_per_row: int | None,
+    current_x: float,
+) -> tuple[dict[str, float], dict[str, int], float]:
+    """Lay out one node subset as its own tree, offset into its own
+    column range starting at current_x. Returns (positions, levels, width).
+    """
+    subset_edges = _filter_edges_for_group(edges, subset)
+    subset_types = {name: node_types.get(name, "other") for name in subset}
+    positions, levels = _tree_layout_indices(subset_edges, subset_types, max_nodes_per_row)
+    width = max(positions.values(), default=0.0) + 1
+    offset_positions = {name: current_x + idx for name, idx in positions.items()}
+    return offset_positions, levels, width
+
+
+def _grouped_tree_layout_indices(
+    edges: list[Edge],
+    node_types: dict[str, str],
+    groups: dict[str, list[str]],
+    group_order: list[str] | None,
+    max_nodes_per_row: int | None,
+) -> tuple[dict[str, float], dict[str, int]]:
+    """Like _tree_layout_indices, but lays each group out in its own
+    column range (its own district) instead of interleaving every node
+    into one tree. Each group keeps its own sibling-order/depth layout,
+    including row-wrapping, and groups are placed left to right.
+    """
+    all_nodes = _layout_nodeset(edges, node_types)
+    ordered_groups = _resolve_group_order(groups, group_order)
+    node_to_group = _assign_nodes_to_groups(all_nodes, groups)
+
+    positions_index: dict[str, float] = {}
+    levels: dict[str, int] = {}
+    current_x = 0.0
+
+    for group_name in ordered_groups:
+        group_nodes = set(groups.get(group_name, [])) & all_nodes
+        if not group_nodes:
+            continue
+        group_positions, group_levels, width = _layout_district_at_offset(
+            edges, node_types, group_nodes, max_nodes_per_row, current_x
+        )
+        positions_index.update(group_positions)
+        levels.update(group_levels)
+        current_x += width + 1  # one empty column between districts
+
+    ungrouped = all_nodes - set(node_to_group.keys())
+    if ungrouped:
+        ungrouped_positions, ungrouped_levels, _width = _layout_district_at_offset(
+            edges, node_types, ungrouped, max_nodes_per_row, current_x
+        )
+        positions_index.update(ungrouped_positions)
+        levels.update(ungrouped_levels)
+
+    return positions_index, levels
+
+
 def _iso_grid_positions(
     layout: IsoLayout,
     edges: list[Edge],
     node_types: dict[str, str],
     options: SvgOptions,
+    groups: dict[str, list[str]] | None = None,
+    group_order: list[str] | None = None,
 ) -> dict[str, tuple[float, float]]:
     if options.iso_compact_layout:
         return _iso_district_grid(edges, node_types)
-    positions_index, levels = _tree_layout_indices(edges, node_types, options.max_nodes_per_row)
+    if options.layout_mode == "grouped" and groups:
+        positions_index, levels = _grouped_tree_layout_indices(
+            edges, node_types, groups, group_order, options.max_nodes_per_row
+        )
+    else:
+        positions_index, levels = _tree_layout_indices(edges, node_types, options.max_nodes_per_row)
     return _tree_grid_positions(layout, positions_index, levels)
 
 
@@ -227,9 +299,11 @@ def _iso_layout_positions(
     edges: list[Edge],
     node_types: dict[str, str],
     options: SvgOptions,
+    groups: dict[str, list[str]] | None = None,
+    group_order: list[str] | None = None,
 ) -> IsoLayoutPositions:
     layout = _iso_layout(options)
-    grid_positions = _iso_grid_positions(layout, edges, node_types, options)
+    grid_positions = _iso_grid_positions(layout, edges, node_types, options, groups, group_order)
     positions = _project_grid(layout, grid_positions)
     min_x, min_y, max_x, max_y = _position_extents(positions)
     offset_x, offset_y = _iso_offsets(layout, min_x, min_y)
