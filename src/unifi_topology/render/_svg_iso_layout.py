@@ -93,7 +93,7 @@ def _iso_grid_positions(
 ) -> dict[str, tuple[float, float]]:
     if options.iso_compact_layout:
         return _iso_district_grid(edges, node_types)
-    positions_index, levels = _tree_layout_indices(edges, node_types)
+    positions_index, levels = _tree_layout_indices(edges, node_types, options.max_nodes_per_row)
     return _tree_grid_positions(layout, positions_index, levels)
 
 

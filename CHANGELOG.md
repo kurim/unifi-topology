@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `SvgOptions.max_nodes_per_row` (default `None`, unchanged output): wraps a node's leaf children (e.g. clients on a switch) into multiple rows once their count exceeds this many, instead of one row that keeps growing wider. A shallow, wide network with 40 clients on one switch rendered as a single 40-wide row (9600x384 orthogonal); at `max_nodes_per_row=10` it becomes a 10x4 grid (2400x768) instead. Applies to both `render_svg` and `render_svg_isometric`'s default tree layout, including within `layout_mode="grouped"` lanes; has no effect under `iso_compact_layout`, which already packs leaves into blocks via its own district layout
+
 ## [3.2.1] - 2026-09-27
 
 ### Fixed
