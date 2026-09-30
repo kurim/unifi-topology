@@ -276,6 +276,14 @@ class SvgOptions:
     # Draw the isometric floor grid behind the nodes.
     iso_show_grid: bool = True
 
+    # Wrap a node's leaf children (e.g. clients on a switch) into multiple
+    # rows once their count exceeds this many, instead of one row that keeps
+    # growing wider. None keeps every leaf sibling on a single row (default,
+    # unchanged output). Applies to both the physical and isometric tree
+    # layouts; has no effect under `iso_compact_layout`, which already packs
+    # leaves into blocks.
+    max_nodes_per_row: int | None = None
+
 
 _FONTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "fonts"
 _SYSTEM_FONT_STACK = "Arial,Helvetica,sans-serif"

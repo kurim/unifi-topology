@@ -14,7 +14,7 @@ from .svg_theme import SvgOptions
 def _layout_nodes(
     edges: list[Edge], node_types: dict[str, str], options: SvgOptions
 ) -> tuple[dict[str, tuple[float, float]], int, int]:
-    positions_index, levels = _tree_layout_indices(edges, node_types)
+    positions_index, levels = _tree_layout_indices(edges, node_types, options.max_nodes_per_row)
     positions: dict[str, tuple[float, float]] = {}
     max_index = max(positions_index.values(), default=0.0)
     leaf_count = max(1, math.ceil(max_index) + 1)
@@ -114,10 +114,38 @@ def _child_position(
     level: int,
     children: dict[str, list[str]],
     state: _LayoutState,
+    max_nodes_per_row: int | None,
 ) -> float:
     if child in state.visited:
         return state.positions_index.get(child, float(state.cursor))
-    return _dfs_position(child, level + 1, children, state)
+    return _dfs_position(child, level + 1, children, state, max_nodes_per_row)
+
+
+def _wrapped_leaf_positions(
+    leaf_children: list[str],
+    level: int,
+    state: _LayoutState,
+    max_nodes_per_row: int,
+) -> list[float]:
+    """Lay siblings with no children of their own out in a wrapped grid.
+
+    Many leaves (e.g. clients on a switch) otherwise share one row that
+    grows as wide as the group is large. Wrapping keeps the row width
+    bounded and stacks the overflow into additional rows below the first,
+    within the column range this group already occupies.
+    """
+    columns = min(len(leaf_children), max_nodes_per_row)
+    base_col = state.cursor
+    positions: list[float] = []
+    for offset, leaf in enumerate(leaf_children):
+        idx = float(base_col + offset % columns)
+        row = offset // columns
+        state.visited.add(leaf)
+        state.positions_index[leaf] = idx
+        _record_layout_level(state, leaf, level + 1 + row)
+        positions.append(idx)
+    state.cursor = base_col + columns
+    return positions
 
 
 def _child_indices(
@@ -125,8 +153,24 @@ def _child_indices(
     level: int,
     children: dict[str, list[str]],
     state: _LayoutState,
+    max_nodes_per_row: int | None,
 ) -> list[float]:
-    return [_child_position(child, level, children, state) for child in children.get(node, [])]
+    kids = children.get(node, [])
+    if not max_nodes_per_row or max_nodes_per_row < 1:
+        return [_child_position(child, level, children, state, max_nodes_per_row) for child in kids]
+    wrappable = [child for child in kids if child not in state.visited and not children.get(child)]
+    indices = [
+        _child_position(child, level, children, state, max_nodes_per_row)
+        for child in kids
+        if child not in wrappable
+    ]
+    if len(wrappable) > max_nodes_per_row:
+        indices.extend(_wrapped_leaf_positions(wrappable, level, state, max_nodes_per_row))
+    else:
+        indices.extend(
+            _child_position(child, level, children, state, max_nodes_per_row) for child in wrappable
+        )
+    return indices
 
 
 def _assign_position(node: str, child_indices: list[float], state: _LayoutState) -> float:
@@ -142,13 +186,15 @@ def _dfs_position(
     level: int,
     children: dict[str, list[str]],
     state: _LayoutState,
+    max_nodes_per_row: int | None = None,
 ) -> float:
     existing = state.positions_index.get(node)
     if existing is not None:
         return existing
     state.visited.add(node)
     _record_layout_level(state, node, level)
-    return _assign_position(node, _child_indices(node, level, children, state), state)
+    child_indices = _child_indices(node, level, children, state, max_nodes_per_row)
+    return _assign_position(node, child_indices, state)
 
 
 def _layout_positions(
@@ -157,22 +203,31 @@ def _layout_positions(
     *,
     roots: list[str],
     sort_key,
+    max_nodes_per_row: int | None = None,
 ) -> tuple[dict[str, float], dict[str, int]]:
     state = _LayoutState()
     for root in roots:
-        _dfs_position(root, 0, children, state)
+        _dfs_position(root, 0, children, state, max_nodes_per_row)
     for node in sorted(nodes, key=sort_key):
         if node not in state.positions_index:
-            _dfs_position(node, 0, children, state)
+            _dfs_position(node, 0, children, state, max_nodes_per_row)
     return state.positions_index, state.levels
 
 
 def _tree_layout_indices(
-    edges: list[Edge], node_types: dict[str, str]
+    edges: list[Edge],
+    node_types: dict[str, str],
+    max_nodes_per_row: int | None = None,
 ) -> tuple[dict[str, float], dict[str, int]]:
     nodes = _layout_nodeset(edges, node_types)
     children, incoming = _build_children_maps(edges, nodes)
     sort_key = _sort_key_for_nodes(node_types)
     _sort_children(children, sort_key)
     roots = _resolve_roots(nodes, incoming, node_types, sort_key)
-    return _layout_positions(nodes, children, roots=roots, sort_key=sort_key)
+    return _layout_positions(
+        nodes,
+        children,
+        roots=roots,
+        sort_key=sort_key,
+        max_nodes_per_row=max_nodes_per_row,
+    )

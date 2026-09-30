@@ -38,7 +38,7 @@ def test_render_svg_isometric_without_icons(monkeypatch):
 def test_render_svg_isometric_skips_missing_positions(monkeypatch):
     from unifi_topology.render import _svg_iso_layout
 
-    monkeypatch.setattr(_svg_iso_layout, "_tree_layout_indices", lambda _e, _n: ({}, {}))
+    monkeypatch.setattr(_svg_iso_layout, "_tree_layout_indices", lambda *_a, **_k: ({}, {}))
     output = svg_iso_module.render_svg_isometric(
         [Edge("A", "B")], node_types={"A": "switch", "B": "switch"}
     )
