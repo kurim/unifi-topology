@@ -9,18 +9,20 @@ from unifi_topology.render.svg_theme import SvgOptions
 NODE_W = 160  # SvgOptions default node_width
 
 
-def _site(clients_per_switch: int = 4) -> tuple[list[Edge], dict[str, str], dict[str, list[str]]]:
+def _site(
+    clients_per_switch: int = 4, wireless: bool = False
+) -> tuple[list[Edge], dict[str, str], dict[str, list[str]]]:
     edges = [Edge("gw", "sw1"), Edge("gw", "sw2")]
     node_types = {"gw": "gateway", "sw1": "switch", "sw2": "switch"}
     groups: dict[str, list[str]] = {"LAN (sw1)": [], "IoT (sw1)": [], "LAN (sw2)": []}
     for i in range(clients_per_switch):
         name = f"a{i}"
-        edges.append(Edge("sw1", name))
+        edges.append(Edge("sw1", name, wireless=wireless))
         node_types[name] = "client"
         groups["LAN (sw1)" if i % 2 == 0 else "IoT (sw1)"].append(name)
     for i in range(clients_per_switch):
         name = f"b{i}"
-        edges.append(Edge("sw2", name))
+        edges.append(Edge("sw2", name, wireless=wireless))
         node_types[name] = "client"
         groups["LAN (sw2)"].append(name)
     return edges, node_types, groups
@@ -102,7 +104,7 @@ def _group_edges(svg: str) -> list[str]:
 
 
 def test_a_group_gets_one_edge_not_one_per_member():
-    edges, node_types, groups = _site(clients_per_switch=6)
+    edges, node_types, groups = _site(clients_per_switch=6, wireless=True)
     svg = _render(edges, node_types, groups)
     assert len(_group_edges(svg)) == len(groups)
     for client in ("a0", "a1", "b0", "b5"):
@@ -110,7 +112,7 @@ def test_a_group_gets_one_edge_not_one_per_member():
 
 
 def test_group_edge_is_an_elbow_ending_at_the_top_centre_of_the_box():
-    edges, node_types, groups = _site()
+    edges, node_types, groups = _site(wireless=True)
     svg = _render(edges, node_types, groups)
     path = re.search(
         r'<path d="([^"]+)"[^>]*data-edge-left="sw2" data-edge-right="::group::LAN \(sw2\)"', svg
@@ -123,6 +125,15 @@ def test_group_edge_is_an_elbow_ending_at_the_top_centre_of_the_box():
     assert end_y == y
 
 
+def test_wired_clients_keep_their_own_edge():
+    """Each wired edge is a cable to a specific switch port."""
+    edges, node_types, groups = _site(clients_per_switch=6)
+    svg = _render(edges, node_types, groups)
+    assert _group_edges(svg) == []
+    for client in ("a0", "a5", "b0", "b5"):
+        assert f'data-edge-right="{client}"' in svg
+
+
 def test_edges_between_ungrouped_nodes_are_unchanged():
     edges, node_types, groups = _site()
     svg = _render(edges, node_types, groups)
@@ -131,7 +142,7 @@ def test_edges_between_ungrouped_nodes_are_unchanged():
 
 
 def test_edges_inside_a_group_are_kept():
-    edges = [Edge("gw", "sw1"), Edge("sw1", "a"), Edge("a", "b")]
+    edges = [Edge("gw", "sw1"), Edge("sw1", "a", wireless=True), Edge("a", "b")]
     node_types = {"gw": "gateway", "sw1": "switch", "a": "client", "b": "client"}
     groups = {"G": ["a", "b"]}
     svg = _render(edges, node_types, groups)

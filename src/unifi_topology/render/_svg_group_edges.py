@@ -23,20 +23,22 @@ def group_anchor_key(group_name: str) -> str:
 
 
 def collapse_group_edges(edges: list[Edge], groups: dict[str, list[str]]) -> list[Edge]:
-    """Replace the edges from one outside node into a group by a single edge.
+    """Replace the wireless edges from one outside node into a group by a single edge.
 
-    A box with a dozen clients under one switch or access point would
-    otherwise get a dozen near-identical connectors. The kept edge ends at
-    the group's anchor (see ``group_anchor_key``) and carries the first
-    member edge's styling (wireless, PoE, VLAN colours). Edges inside a group,
-    or between two nodes outside every group, are kept as they are.
+    An access point with a dozen clients in one box would otherwise get a
+    dozen near-identical connectors. The kept edge ends at the group's anchor
+    (see ``group_anchor_key``) and carries the first member edge's styling
+    (wireless, VLAN colours). Wired edges are kept as they are: each one is a
+    physical cable to a specific switch port, which is what the line shows.
+    Edges inside a group, or between two nodes outside every group, are
+    untouched too.
     """
     node_to_group = _build_node_to_group_map(groups)
     seen: set[tuple[str, str]] = set()
     collapsed: list[Edge] = []
     for edge in edges:
         group = node_to_group.get(edge.right)
-        if group is None or node_to_group.get(edge.left) == group:
+        if not edge.wireless or group is None or node_to_group.get(edge.left) == group:
             collapsed.append(edge)
             continue
         key = (edge.left, group)

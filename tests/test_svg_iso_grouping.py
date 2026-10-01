@@ -113,8 +113,14 @@ def test_iso_compact_layout_with_grouping_does_not_crash():
     assert svg.startswith("<svg")
 
 
-def test_render_svg_isometric_draws_one_edge_per_group():
+def test_render_svg_isometric_draws_one_edge_per_wireless_group():
     edges, node_types = _two_vlan_topology()
+    edges = [
+        Edge(e.left, e.right, vlans=e.vlans, active_vlans=e.active_vlans, wireless=True)
+        if e.right.startswith(("lan", "guest"))
+        else e
+        for e in edges
+    ]
     groups = {
         "LAN": [n for n in node_types if n.startswith("lan")],
         "Guest": [n for n in node_types if n.startswith("guest")],
@@ -132,6 +138,19 @@ def test_render_svg_isometric_draws_one_edge_per_group():
     assert len(group_edges) == 2
     assert 'data-edge-right="lan0"' not in svg
     assert 'data-edge-left="gw" data-edge-right="sw1"' in svg
+
+
+def test_render_svg_isometric_keeps_wired_edges_per_client():
+    edges, node_types = _two_vlan_topology()
+    groups = {"LAN": [n for n in node_types if n.startswith("lan")]}
+    options = SvgOptions(layout_mode="grouped")
+
+    svg = svg_iso_module.render_svg_isometric(
+        edges, node_types=node_types, options=options, groups=groups
+    )
+
+    assert "::group::" not in svg
+    assert 'data-edge-right="lan0"' in svg
 
 
 def test_render_svg_isometric_marks_group_members_with_data_group():
