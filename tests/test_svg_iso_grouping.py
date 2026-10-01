@@ -1,5 +1,7 @@
 """Tests for VLAN-grouped isometric layout (layout_mode="grouped")."""
 
+import re
+
 from unifi_topology.model import group_nodes_by_vlan
 from unifi_topology.model.topology import Edge
 from unifi_topology.render import svg_isometric as svg_iso_module
@@ -123,6 +125,10 @@ def test_render_svg_isometric_draws_one_edge_per_group():
         edges, node_types=node_types, options=options, groups=groups
     )
 
-    assert svg.count('data-edge-right="::group::') == 2
+    # A VLAN-striped edge is drawn as several paths sharing one attribute set.
+    group_edges = set(
+        re.findall(r'data-edge-left="([^"]+)" data-edge-right="(::group::[^"]+)"', svg)
+    )
+    assert len(group_edges) == 2
     assert 'data-edge-right="lan0"' not in svg
     assert 'data-edge-left="gw" data-edge-right="sw1"' in svg
