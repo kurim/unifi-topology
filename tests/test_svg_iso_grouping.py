@@ -109,3 +109,22 @@ def test_iso_compact_layout_with_grouping_does_not_crash():
     )
 
     assert svg.startswith("<svg")
+
+
+def test_render_svg_isometric_draws_one_edge_per_group():
+    edges, node_types = _two_vlan_topology()
+    groups, group_order, group_vlan_ids = group_nodes_by_vlan(edges, {1: "LAN", 20: "Guest"})
+    options = SvgOptions(layout_mode="grouped")
+
+    svg = svg_iso_module.render_svg_isometric(
+        edges,
+        node_types=node_types,
+        options=options,
+        groups=groups,
+        group_order=group_order,
+        group_vlan_ids=group_vlan_ids,
+    )
+
+    # LAN and Guest each get one edge; the root ("Unassigned") has no parent.
+    assert svg.count('data-edge-right="::group::') == 2
+    assert 'data-edge-right="lan0"' not in svg

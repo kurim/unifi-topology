@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..model.topology import Edge, VpnTunnel, WanInfo
 from . import _svg_iso_layout, _svg_iso_overlays
+from ._svg_group_edges import isometric_group_anchors
 from ._svg_render_common import finish_svg_document, render_at_gateway, start_svg_document
 from .svg_icons import _build_decal_colors, _load_isometric_icons
 from .svg_iso_edges import _render_iso_edges
@@ -80,9 +81,11 @@ def _render_iso_nodes_and_edges(
     theme: SvgTheme,
     offset_x: float,
     offset_y: float,
+    groups: dict[str, list[str]] | None = None,
 ) -> None:
     node_port_labels: dict[str, str] = {}
     node_port_prefix: dict[str, str] = {}
+    grouped = options.layout_mode == "grouped" and bool(groups)
     _render_iso_edges(
         lines,
         edges,
@@ -97,6 +100,10 @@ def _render_iso_nodes_and_edges(
         node_port_prefix=node_port_prefix,
         node_names=node_names,
         avoid_nodes=options.iso_route_around_nodes,
+        groups=groups if grouped else None,
+        group_anchors=isometric_group_anchors(grid_positions, groups or {}, layout, options)
+        if grouped
+        else None,
     )
     _render_iso_nodes(
         lines,
@@ -274,6 +281,7 @@ def render_svg_isometric(
         theme=theme,
         offset_x=layout_positions.offset_x,
         offset_y=layout_positions.offset_y,
+        groups=groups,
     )
     _render_iso_gateway_overlays(
         lines,

@@ -97,13 +97,46 @@ def test_infrastructure_has_no_box():
     assert 'data-node-id="gw" data-node-type="gateway" data-group' not in svg
 
 
-def test_edges_to_grouped_nodes_keep_normal_elbow_routing():
+def _group_edges(svg: str) -> list[str]:
+    return re.findall(r'<path d="([^"]+)"[^>]*data-edge-right="::group::[^"]+"', svg)
+
+
+def test_a_group_gets_one_edge_not_one_per_member():
+    edges, node_types, groups = _site(clients_per_switch=6)
+    svg = _render(edges, node_types, groups)
+    assert len(_group_edges(svg)) == len(groups)
+    for client in ("a0", "a1", "b0", "b5"):
+        assert f'data-edge-right="{client}"' not in svg
+
+
+def test_group_edge_is_an_elbow_ending_at_the_top_centre_of_the_box():
     edges, node_types, groups = _site()
-    grouped = _render(edges, node_types, groups)
-    path = re.search(r'<path d="([^"]+)"[^>]*data-edge-left="sw1" data-edge-right="a1"', grouped)
+    svg = _render(edges, node_types, groups)
+    path = re.search(
+        r'<path d="([^"]+)"[^>]*data-edge-left="sw2" data-edge-right="::group::LAN \(sw2\)"', svg
+    )
     assert path
     assert path.group(1).count(" L ") > 1
-    assert "stroke-dasharray" not in path.group(0)
+    x, y, w, _h = _boundaries(svg)["LAN (sw2)"]
+    end_x, end_y = (float(v) for v in path.group(1).split(" L ")[-1].split())
+    assert end_x == x + w / 2
+    assert end_y == y
+
+
+def test_edges_between_ungrouped_nodes_are_unchanged():
+    edges, node_types, groups = _site()
+    svg = _render(edges, node_types, groups)
+    assert 'data-edge-left="gw" data-edge-right="sw1"' in svg
+    assert 'data-edge-left="gw" data-edge-right="sw2"' in svg
+
+
+def test_edges_inside_a_group_are_kept():
+    edges = [Edge("gw", "sw1"), Edge("sw1", "a"), Edge("a", "b")]
+    node_types = {"gw": "gateway", "sw1": "switch", "a": "client", "b": "client"}
+    groups = {"G": ["a", "b"]}
+    svg = _render(edges, node_types, groups)
+    assert 'data-edge-left="a" data-edge-right="b"' in svg
+    assert len(_group_edges(svg)) == 1
 
 
 def test_group_blocks_wrap_with_max_nodes_per_row():

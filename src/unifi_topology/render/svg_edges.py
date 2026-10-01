@@ -6,6 +6,7 @@ import math
 
 from ..model.topology import Edge
 from . import _svg_edge_labels_record, _svg_edge_shared
+from ._svg_group_edges import collapse_group_edges
 from .svg_theme import SvgOptions, SvgTheme
 
 __all__ = [
@@ -162,11 +163,17 @@ def _render_svg_edges(
     theme: SvgTheme,
     max_vlan_colors: int | None = None,
     node_names: dict[str, str] | None = None,
+    groups: dict[str, list[str]] | None = None,
+    group_anchors: dict[str, tuple[float, float]] | None = None,
 ) -> tuple[dict[str, str], dict[str, str]]:
     node_port_labels: dict[str, str] = {}
     node_port_prefix: dict[str, str] = {}
     for edge in edges:
         _record_edge_labels(edge, node_types, node_port_labels, node_port_prefix, node_names)
+    if groups and group_anchors:
+        edges = collapse_group_edges(edges, groups)
+        positions = {**positions, **group_anchors}
+        node_types = {**node_types, **{key: "client" for key in group_anchors}}
     for edge in sorted(edges, key=lambda item: item.poe):
         if edge.left not in positions or edge.right not in positions:
             continue

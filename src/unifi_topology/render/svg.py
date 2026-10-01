@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..model.topology import Edge, VpnTunnel, WanInfo
 from . import _svg_dual_render, _svg_render_flow
+from ._svg_group_edges import orthogonal_group_anchors
 from ._svg_node_types import _TYPE_COLORS, _safe_node_type
 from ._svg_render_common import finish_svg_document, start_svg_document
 from .svg_edges import _render_svg_edges
@@ -92,9 +93,18 @@ def _render_svg_topology(
     theme: SvgTheme,
     groups: dict[str, list[str]] | None,
     node_names: dict[str, str] | None = None,
+    group_bounds_list: list[GroupBounds] | None = None,
 ) -> None:
     node_port_labels, _ = _render_svg_edges(
-        lines, edges, positions, node_types, options, theme, node_names=node_names
+        lines,
+        edges,
+        positions,
+        node_types,
+        options,
+        theme,
+        node_names=node_names,
+        groups=groups if group_bounds_list else None,
+        group_anchors=orthogonal_group_anchors(group_bounds_list or [], options),
     )
     _render_svg_nodes(
         lines,
@@ -159,6 +169,7 @@ def render_svg(
         theme=theme,
         groups=groups,
         node_names=node_names,
+        group_bounds_list=group_bounds_list if use_grouped else None,
     )
     _svg_render_flow.render_svg_gateway_overlays(
         lines=lines,

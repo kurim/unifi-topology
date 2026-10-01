@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from ..model.topology import Edge
 from . import _svg_edge_shared
+from ._svg_group_edges import collapse_group_edges
 from ._svg_iso_edge_labels import _record_iso_edge_labels
 from ._svg_iso_routing import (
     edge_lane_offsets,
@@ -307,9 +308,16 @@ def _render_iso_edges(
     max_vlan_colors: int | None = None,
     node_names: dict[str, str] | None = None,
     avoid_nodes: bool = False,
+    groups: dict[str, list[str]] | None = None,
+    group_anchors: dict[str, tuple[float, float]] | None = None,
 ) -> None:
     _record_iso_edge_labels(edges, node_types, node_port_labels, node_port_prefix, node_names)
     occupied = edge_occupancy(grid_positions, avoid_nodes=avoid_nodes)
+    if groups and group_anchors:
+        edges = collapse_group_edges(edges, groups)
+        grid_positions = {**grid_positions, **group_anchors}
+        positions = {**positions, **{key: (0.0, 0.0) for key in group_anchors}}
+        node_types = {**node_types, **{key: "client" for key in group_anchors}}
     for edge, lane_offset in _edge_lane_plan(edges, avoid_nodes=avoid_nodes):
         if edge.left not in positions or edge.right not in positions:
             continue
