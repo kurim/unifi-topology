@@ -334,6 +334,7 @@ def _render_iso_node(
     port_prefix: str | None,
     layout: IsoLayout,
     theme: SvgTheme,
+    group_name: str | None = None,
 ) -> None:
     safe_type = _safe_node_type(node_type)
     stroke = theme.node_stroke or _TYPE_COLORS[safe_type][1]
@@ -343,7 +344,7 @@ def _render_iso_node(
     is_client = node_type in ("client", "client_cluster")
     node_depth = _node_depth(port_label, layout)
 
-    group_attrs = _svg_node_group_attrs(None, node_id, node_type)
+    group_attrs = _svg_node_group_attrs(None, node_id, node_type, group_name)
     lines.append(f"<g{group_attrs}>")
     lines.append(f"<title>{_escape_text(name)}</title>")
     if options.iso_lighting:
@@ -422,8 +423,10 @@ def _render_iso_nodes(
     node_port_labels: dict[str, str],
     node_port_prefix: dict[str, str],
     theme: SvgTheme,
+    node_to_group: dict[str, str] | None = None,
 ) -> None:
     names = node_names or {}
+    group_of = node_to_group or {}
     # Draw back-to-front so nearer nodes and their shadows overlap farther ones.
     ordered = sorted(positions.items(), key=lambda item: item[1][1])
     for node_id, (x, y) in ordered:
@@ -440,4 +443,5 @@ def _render_iso_nodes(
             port_prefix=node_port_prefix.get(node_id),
             layout=layout,
             theme=theme,
+            group_name=group_of.get(node_id),
         )

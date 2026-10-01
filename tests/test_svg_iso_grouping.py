@@ -132,3 +132,15 @@ def test_render_svg_isometric_draws_one_edge_per_group():
     assert len(group_edges) == 2
     assert 'data-edge-right="lan0"' not in svg
     assert 'data-edge-left="gw" data-edge-right="sw1"' in svg
+
+
+def test_render_svg_isometric_marks_group_members_with_data_group():
+    edges, node_types = _two_vlan_topology()
+    groups = {"LAN": [n for n in node_types if n.startswith("lan")]}
+    options = SvgOptions(layout_mode="grouped")
+
+    svg = svg_iso_module.render_svg_isometric(
+        edges, node_types=node_types, options=options, groups=groups
+    )
+
+    assert svg.count('data-group="LAN"') == len(groups["LAN"])

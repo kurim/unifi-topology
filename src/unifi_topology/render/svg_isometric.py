@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..model.topology import Edge, VpnTunnel, WanInfo
 from . import _svg_iso_layout, _svg_iso_overlays
 from ._svg_group_edges import isometric_group_anchors
+from ._svg_group_layout import _build_node_to_group_map
 from ._svg_render_common import finish_svg_document, render_at_gateway, start_svg_document
 from .svg_icons import _build_decal_colors, _load_isometric_icons
 from .svg_iso_edges import _render_iso_edges
@@ -116,6 +117,7 @@ def _render_iso_nodes_and_edges(
         node_port_labels=node_port_labels,
         node_port_prefix=node_port_prefix,
         theme=theme,
+        node_to_group=_build_node_to_group_map(groups) if grouped and groups else None,
     )
 
 
